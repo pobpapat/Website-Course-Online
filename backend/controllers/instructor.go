@@ -15,7 +15,15 @@ func GetInstructorCourses(c *fiber.Ctx) error {
 	instructorID, _ := uuid.Parse(instructorIDStr)
 
 	var courses []models.Course
-	config.DB.Where("instructor_id = ?", instructorID).Find(&courses)
+	config.DB.
+		Where("instructor_id = ?", instructorID).
+		Preload("Modules", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort_order ASC")
+		}).
+		Preload("Modules.Lessons", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort_order ASC")
+		}).
+		Find(&courses)
 
 	return c.JSON(fiber.Map{"courses": courses})
 }
@@ -97,9 +105,13 @@ func CreateLesson(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Title is required"})
 	}
 
-	contentType := "video"
-	if input.ContentType == "article" {
-		contentType = "article"
+	contentType := "article"
+	if input.ContentType == "video" {
+		contentType = "video"
+	} else if input.ContentURL != "" && input.BodyText != "" {
+		contentType = "mixed"
+	} else if input.ContentURL != "" {
+		contentType = "video"
 	}
 
 	lesson := models.Lesson{
@@ -219,5 +231,5 @@ func GetMyLearning(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"my_courses": result})
 }
 
-// GetCoursesByInstructor uses gorm for preload ordering
-var _ = gorm.DB{}
+// ensure gorm is used
+var _ *gorm.DB

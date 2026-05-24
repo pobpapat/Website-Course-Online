@@ -85,7 +85,7 @@ export default function Navbar() {
                                     to="/register"
                                     className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg shadow transition"
                                 >
-                                    เริ่มต้นใช้งาน
+                                    สมัครสมาชิก
                                 </Link>
                             </>
                         )}

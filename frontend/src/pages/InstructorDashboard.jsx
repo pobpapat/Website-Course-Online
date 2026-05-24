@@ -80,7 +80,8 @@ export default function InstructorDashboard() {
     const [courseForm, setCourseForm] = useState({ title: '', description: '', price: '' })
     const [thumbnailFile, setThumbnailFile] = useState(null)
     const [moduleForm, setModuleForm] = useState({ title: '', sort_order: 0 })
-    const [lessonForm, setLessonForm] = useState({ title: '', content_type: 'mixed', content_url: '', body_text: '', sort_order: 0 })
+    const [lessonForm, setLessonForm] = useState({ title: '', content_url: '', body_text: '', sort_order: 0 })
+    const [lessonVideoFile, setLessonVideoFile] = useState(null)
     const [submitting, setSubmitting] = useState(false)
     const [formError, setFormError] = useState('')
 
@@ -147,15 +148,32 @@ export default function InstructorDashboard() {
         e.preventDefault()
         setSubmitting(true)
         setFormError('')
-        const res = await createLessonAPI(showAddLesson, lessonForm, token)
-        if (res.lesson) {
-            setShowAddLesson(null)
-            setLessonForm({ title: '', content_type: 'mixed', content_url: '', body_text: '', sort_order: 0 })
-            fetchData()
-        } else {
-            setFormError(res.error || 'Failed')
+        try {
+            let videoUrl = lessonForm.content_url
+            if (lessonVideoFile) {
+                const uploadRes = await uploadFileAPI(lessonVideoFile, token)
+                if (uploadRes.url) videoUrl = uploadRes.url
+                else { setFormError('อัปโหลดวิดีโอไม่สำเร็จ'); setSubmitting(false); return }
+            }
+            const payload = {
+                title: lessonForm.title,
+                content_url: videoUrl,
+                body_text: lessonForm.body_text,
+                sort_order: lessonForm.sort_order,
+                content_type: videoUrl && lessonForm.body_text ? 'mixed' : videoUrl ? 'video' : 'article',
+            }
+            const res = await createLessonAPI(showAddLesson, payload, token)
+            if (res.lesson) {
+                setShowAddLesson(null)
+                setLessonForm({ title: '', content_url: '', body_text: '', sort_order: 0 })
+                setLessonVideoFile(null)
+                fetchData()
+            } else {
+                setFormError(res.error || 'Failed')
+            }
+        } finally {
+            setSubmitting(false)
         }
-        setSubmitting(false)
     }
 
     // ── Render ──
@@ -391,17 +409,74 @@ export default function InstructorDashboard() {
 
             {/* Add Lesson */}
             {showAddLesson && (
-                <Modal title="Add Lesson" onClose={() => setShowAddLesson(null)}>
+                <Modal title="เพิ่มบทเรียน" onClose={() => { setShowAddLesson(null); setLessonVideoFile(null) }}>
                     <form onSubmit={handleAddLesson} className="space-y-4">
                         {formError && <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-300 text-sm">{formError}</div>}
-                        <InputField label="Lesson Title *" value={lessonForm.title} onChange={e => setLessonForm({ ...lessonForm, title: e.target.value })} placeholder="e.g. What is React?" required />
-                        <InputField label="Video URL (ใส่หรือไม่ก็ได้)" value={lessonForm.content_url} onChange={e => setLessonForm({ ...lessonForm, content_url: e.target.value })} placeholder="/uploads/video.mp4" />
-                        <InputField label="Article Content (เนื้อหาบทเรียน / ข้อความ)" type="textarea" value={lessonForm.body_text} onChange={e => setLessonForm({ ...lessonForm, body_text: e.target.value })} placeholder="พิมพ์เนื้อหาที่นี่..." />
-                        <InputField label="Sort Order" type="number" value={lessonForm.sort_order} onChange={e => setLessonForm({ ...lessonForm, sort_order: parseInt(e.target.value) || 0 })} placeholder="0" />
+
+                        <InputField
+                            label="ชื่อบทเรียน *"
+                            value={lessonForm.title}
+                            onChange={e => setLessonForm({ ...lessonForm, title: e.target.value })}
+                            placeholder="เช่น บทนำ: React คืออะไร?"
+                            required
+                        />
+
+                        {/* Video Section */}
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+                            <p className="text-sm font-medium text-slate-300">🎬 วิดีโอ (ถ้ามี)</p>
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1.5">อัปโหลดไฟล์วิดีโอ</label>
+                                <input
+                                    type="file"
+                                    accept="video/*"
+                                    onChange={e => {
+                                        setLessonVideoFile(e.target.files[0])
+                                        if (e.target.files[0]) setLessonForm({ ...lessonForm, content_url: '' })
+                                    }}
+                                    className="w-full text-sm text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-600/30 file:text-blue-300 file:text-xs hover:file:bg-blue-600/50 transition"
+                                />
+                                {lessonVideoFile && (
+                                    <p className="text-xs text-blue-400 mt-1">✓ เลือกแล้ว: {lessonVideoFile.name}</p>
+                                )}
+                            </div>
+                            {!lessonVideoFile && (
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1.5">หรือใส่ URL วิดีโอ</label>
+                                    <input
+                                        type="text"
+                                        value={lessonForm.content_url}
+                                        onChange={e => setLessonForm({ ...lessonForm, content_url: e.target.value })}
+                                        placeholder="/uploads/video.mp4 หรือ https://..."
+                                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Details / Article Section */}
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                            <p className="text-sm font-medium text-slate-300 mb-3">📝 รายละเอียดบทเรียน (ถ้ามี)</p>
+                            <textarea
+                                value={lessonForm.body_text}
+                                onChange={e => setLessonForm({ ...lessonForm, body_text: e.target.value })}
+                                placeholder="พิมพ์รายละเอียด เนื้อหา หรือบทความที่นี่..."
+                                rows={5}
+                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+                            />
+                        </div>
+
+                        <InputField
+                            label="ลำดับ (Sort Order)"
+                            type="number"
+                            value={lessonForm.sort_order}
+                            onChange={e => setLessonForm({ ...lessonForm, sort_order: parseInt(e.target.value) || 0 })}
+                            placeholder="0"
+                        />
+
                         <div className="flex gap-3 pt-2">
-                            <button type="button" onClick={() => setShowAddLesson(null)} className="flex-1 py-2.5 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-sm transition hover:bg-white/10">Cancel</button>
+                            <button type="button" onClick={() => { setShowAddLesson(null); setLessonVideoFile(null) }} className="flex-1 py-2.5 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-sm transition hover:bg-white/10">ยกเลิก</button>
                             <button type="submit" disabled={submitting} className="flex-1 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition">
-                                {submitting ? 'Adding...' : 'Add Lesson'}
+                                {submitting ? 'กำลังบันทึก...' : 'เพิ่มบทเรียน'}
                             </button>
                         </div>
                     </form>
