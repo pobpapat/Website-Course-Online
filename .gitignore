@@ -12,6 +12,7 @@
 **/.dockerignore
 
 # Backend
+/backend/.env
 /backend/uploads/
 /backend/*.log
 /backend/*.exe
